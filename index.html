@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>VTuber スマホジャイロモデル</title>
+  <title>VTuber Android/PC特化モデル（WAV対応）</title>
   <style>
     body {
       margin: 0;
-      background-image: url('./玄関前.png'); /* 同じフォルダの画像を指定 */
+      background-image: url('./玄関前.png');
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
@@ -17,17 +17,23 @@
       height: 100vh;
       overflow: hidden;
       user-select: none;
-      touch-action: none; /* スマホの画面スクロールを防止 */
+      touch-action: none;
     }
     canvas {
       background-color: transparent;
       max-width: 100vw;
       max-height: 100vh;
     }
-    .gyro-btn {
+    .ui-container {
       position: absolute;
       top: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
       z-index: 10;
+    }
+    .btn {
       padding: 12px 24px;
       font-size: 16px;
       font-weight: bold;
@@ -36,79 +42,123 @@
       border: 1px solid #fff;
       border-radius: 25px;
       cursor: pointer;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    .btn:active {
+      transform: scale(0.95);
+    }
+    #status {
+      color: white;
+      background: rgba(0,0,0,0.5);
+      padding: 5px 10px;
+      border-radius: 10px;
+      font-size: 14px;
+      pointer-events: none;
     }
   </style>
 </head>
 <body>
 
-<button class="gyro-btn" id="gyroBtn">📱 傾きセンサーを有効化</button>
+<div class="ui-container">
+  <button class="btn" id="startBtn">🎤 音声認識＆センサーを有効化</button>
+  <button class="btn" id="poseBtn" style="background: rgba(0, 100, 200, 0.8);">🙋 手を上げる / ポーズ切替</button>
+  <div id="status">状態: 停止中</div>
+</div>
+
 <canvas id="vtuberCanvas"></canvas>
 
 <script>
 const canvas = document.getElementById('vtuberCanvas');
 const ctx = canvas.getContext('2d');
 
-let offsetX = 0; // マウス/ジャイロのX軸オフセット (-1〜1)
-let offsetY = 0; // マウス/ジャイロのY軸オフセット (-1〜1)
-let raiseHandMode = 0;
+let offsetX = 0;
+let offsetY = 0;
+let raiseHandMode = 0; // 0:通常, 1:左手, 2:右手, 3:両手
 
-// ジャイロ有効化処理（iOS対策）
-const gyroBtn = document.getElementById('gyroBtn');
-gyroBtn.addEventListener('click', async () => {
-  // DeviceOrientationEvent.requestPermission が存在する場合（iOS）
-  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-    try {
-      const permission = await DeviceOrientationEvent.requestPermission();
-      if (permission === 'granted') {
-        window.addEventListener('deviceorientation', handleOrientation);
-        gyroBtn.style.display = 'none'; // ボタンを隠す
-      } else {
-        alert('センサーの使用が拒否されました');
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  } else {
-    // Androidや非iOS環境（自動的にイベントリスナーを追加）
-    window.addEventListener('deviceorientation', handleOrientation);
-    gyroBtn.style.display = 'none'; // ボタンを隠す
+// --- 1. ランダムボイスの準備（WAV形式） ---
+const voiceSources = ['./voice1.wav', './voice2.wav', './voice3.wav'];
+const voices = voiceSources.map(src => new Audio(src));
+let currentVoice = null;
+
+// --- 2. 手を上げるボタンの処理 ---
+const poseBtn = document.getElementById('poseBtn');
+poseBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  raiseHandMode = (raiseHandMode + 1) % 4;
+});
+
+// --- 3. センサー＆音声認識の有効化 ---
+const startBtn = document.getElementById('startBtn');
+const statusDiv = document.getElementById('status');
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+startBtn.addEventListener('click', () => {
+  // ジャイロセンサーの有効化
+  if (typeof window.DeviceOrientationEvent !== 'undefined') {
+    window.addEventListener('deviceorientation', (e) => {
+      const gamma = e.gamma || 0;
+      const beta = e.beta || 0;
+      offsetX = Math.min(Math.max(gamma / 30, -1), 1);
+      offsetY = Math.min(Math.max((beta - 45) / 30, -1), 1);
+    });
   }
+
+  // 音声認識の開始
+  if (!SpeechRecognition) {
+    statusDiv.textContent = 'エラー: 音声認識非対応ブラウザです';
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+  recognition.lang = 'ja-JP';
+  recognition.continuous = true;
+  recognition.interimResults = false;
+
+  recognition.onstart = () => {
+    startBtn.style.display = 'none';
+    statusDiv.textContent = '状態: 話しかけを待っています...';
+  };
+
+  recognition.onresult = (event) => {
+    const results = event.results;
+    for (let i = event.resultIndex; i < results.length; i++) {
+      if (results[i].isFinal) {
+        const text = results[i][0].transcript.trim();
+        statusDiv.textContent = `聴き取り: 「${text}」`;
+
+        // WAV音源をランダム再生
+        if (currentVoice) {
+          currentVoice.pause();
+          currentVoice.currentTime = 0;
+        }
+        const randomIndex = Math.floor(Math.random() * voices.length);
+        currentVoice = voices[randomIndex];
+        currentVoice.play().catch(err => console.log('再生エラー:', err));
+      }
+    }
+  };
+
+  recognition.onerror = (e) => {
+    console.error('音声認識エラー:', e.error);
+    statusDiv.textContent = `エラー: ${e.error}`;
+  };
+
+  recognition.onend = () => {
+    try { recognition.start(); } catch(e) {}
+  };
+
+  recognition.start();
 });
 
-// スマホの傾きイベント処理
-function handleOrientation(e) {
-  // gamma: 左右の傾き (-90 〜 90) -> キャラクターの左右の向き（X軸）
-  // beta: 前後の傾き (-180 〜 180) -> キャラクターの上下の向き（Y軸）
-  
-  const gamma = e.gamma || 0;
-  const beta = e.beta || 0;
-
-  // 傾き角度を -1.0 〜 1.0 の範囲に正規化（キャラクター移動用）
-  // スマホを30度傾けたときが最大移動量になるように設定
-  offsetX = Math.min(Math.max(gamma / 30, -1), 1);
-  offsetY = Math.min(Math.max((beta - 45) / 30, -1), 1); // スマホを45度で持つ状態を基準値に設定
-}
-
-// PC用マウスイベント
+// PC用マウスフォールバック
 window.addEventListener('mousemove', (e) => {
+  if (startBtn.style.display !== 'none') return;
   const rect = canvas.getBoundingClientRect();
-  const mouseX = e.clientX - rect.left;
-  const mouseY = e.clientY - rect.top;
-  
-  // マウス位置をキャンバス中心からの相対座標に正規化 (-1.0 〜 1.0)
-  offsetX = (mouseX - canvas.width / 2) / (canvas.width / 2);
-  offsetY = (mouseY - canvas.height / 2) / (canvas.height / 2);
+  offsetX = ((e.clientX - rect.left) - canvas.width / 2) / (canvas.width / 2);
+  offsetY = ((e.clientY - rect.top) - canvas.height / 2) / (canvas.height / 2);
 });
 
-// タッチ/クリックでポーズ切替
-window.addEventListener('touchstart', () => {
-  raiseHandMode = (raiseHandMode + 1) % 4;
-});
-window.addEventListener('click', () => {
-  raiseHandMode = (raiseHandMode + 1) % 4;
-});
-
-// 画像アセット定義
+// --- 画像読み込みと描画ループ ---
 const images = {};
 const sources = {
   foot_l: './foot_l.png', foot_r: './foot_r.png', leg: './leg.png', body: './body.png',
@@ -138,13 +188,11 @@ function render(timestamp) {
   const centerY = canvas.height / 2;
   const breath = Math.sin(timestamp / 500) * 2;
 
-  // 1. 脚・足・胴体
   drawParts(images.foot_l, centerX, centerY, 0, 0, 0);
   drawParts(images.foot_r, centerX, centerY, 0, 0, 0);
   drawParts(images.leg, centerX, centerY, offsetX * 3, offsetY * 2, 0);
   drawParts(images.body, centerX, centerY, offsetX * 5, offsetY * 3 + breath, 0);
 
-  // 2. 右腕・左腕
   const isRightUp = (raiseHandMode === 2 || raiseHandMode === 3);
   if (isRightUp) {
     const pivotX = centerX - 100, pivotY = centerY - 50, angle = Math.PI + (offsetX * 0.1);
@@ -169,7 +217,6 @@ function render(timestamp) {
     drawParts(images.hand_l, centerX, centerY, offsetX * 15, offsetY * 8 + breath, offsetX * 0.08);
   }
 
-  // 3. 頭部
   drawParts(images.head, centerX, centerY, offsetX * 25, offsetY * 15 + breath * 0.5, offsetX * 0.06);
 
   requestAnimationFrame(render);
