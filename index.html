@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>VTuber マウス追従モデル（カーソル非表示＆矢印キー移動版）</title>
+  <style>
+    body {
+      margin: 0;
+      /* 同じフォルダにある画像を相対パスで指定 */
+      background-image: url('./玄関前.png');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+      cursor: none; /* 画面全体でマウスカーソルを非表示 */
+    }
+    canvas {
+      background-color: transparent;
+      max-width: 100vw;
+      max-height: 100vh;
+      cursor: none; /* キャンバス上でも非表示 */
+    }
+    .guide {
+      position: absolute;
+      bottom: 20px;
+      background: rgba(0, 0, 0, 0.6);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-family: sans-serif;
+      font-size: 14px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="vtuberCanvas"></canvas>
+<div class="guide">⌨️ [矢印キー] キャラクター移動 / [Space] 位置リセット</div>
+
+<script>
+const canvas = document.getElementById('vtuberCanvas');
+const ctx = canvas.getContext('2d');
+
+let mouseX = 0;
+let mouseY = 0;
+
+// キャラクターの位置オフセット
+let charPosX = 0;
+let charPosY = 0;
+const moveSpeed = 15; // 矢印キーでの移動速度
+
+// マウス位置取得
+window.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  mouseX = e.clientX - rect.left;
+  mouseY = e.clientY - rect.top;
+});
+
+// キーボード操作（矢印キーで移動・スペースでリセット）
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowLeft')  charPosX -= moveSpeed;
+  if (e.key === 'ArrowRight') charPosX += moveSpeed;
+  if (e.key === 'ArrowUp')    charPosY -= moveSpeed;
+  if (e.key === 'ArrowDown')  charPosY += moveSpeed;
+  
+  // スペースキーで位置リセット
+  if (e.key === ' ') {
+    charPosX = 0;
+    charPosY = 0;
+  }
+});
+
+// 画像アセット定義（GitHub Pages用に相対パス ./ を追加）
+const images = {};
+const sources = {
+  foot_l: './foot_l.png',
+  foot_r: './foot_r.png',
+  leg: './leg.png',
+  body: './body.png',
+  arm2_l: './arm2_l.png',
+  arm1_l: './arm1_l.png',
+  hand_l: './hand_l.png',
+  arm2_r: './arm2_r.png',
+  arm1_r: './arm1_r.png',
+  hand_r: './hand_r.png',
+  head: './head.png'
+};
+
+let loadedImages = 0;
+const numImages = Object.keys(sources).length;
+
+for (let src in sources) {
+  images[src] = new Image();
+  images[src].src = sources[src];
+  images[src].onload = () => {
+    if (++loadedImages >= numImages) {
+      // 胴体画像のサイズをキャンバスサイズに設定
+      canvas.width = images.body.naturalWidth || 1000;
+      canvas.height = images.body.naturalHeight || 1000;
+      mouseX = canvas.width / 2;
+      mouseY = canvas.height / 2;
+      requestAnimationFrame(render);
+    }
+  };
+}
+
+// 描画メインループ
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
+
+  // マウス追従用オフセット (-1 〜 1)
+  const offsetX = (mouseX - centerX) / centerX;
+  const offsetY = (mouseY - centerY) / centerY;
+
+  // 全パーツの共通ベース位置（キーボード移動量を加算）
+  const baseShiftX = charPosX;
+  const baseShiftY = charPosY;
+
+  // 1. 脚・足
+  drawLayer(images.foot_l, baseShiftX, baseShiftY);
+  drawLayer(images.foot_r, baseShiftX, baseShiftY);
+  drawLayer(images.leg, baseShiftX + offsetX * 2, baseShiftY + offsetY * 2);
+
+  // 2. 胴体
+  drawLayer(images.body, baseShiftX + offsetX * 4, baseShiftY + offsetY * 3);
+
+  // 3. 空中分離腕（バグ再現位置 + キー移動）
+  const floatingY = -280 + offsetY * 20;
+  const floatingX = offsetX * 15;
+
+  drawLayer(images.arm2_r, baseShiftX + floatingX, baseShiftY + floatingY);
+  drawLayer(images.arm1_r, baseShiftX + floatingX, baseShiftY + floatingY);
+  drawLayer(images.hand_r, baseShiftX + floatingX, baseShiftY + floatingY);
+
+  drawLayer(images.arm2_l, baseShiftX + floatingX, baseShiftY + floatingY);
+  drawLayer(images.arm1_l, baseShiftX + floatingX, baseShiftY + floatingY);
+  drawLayer(images.hand_l, baseShiftX + floatingX, baseShiftY + floatingY);
+
+  // 4. 頭部
+  drawLayer(images.head, baseShiftX + offsetX * 15, baseShiftY + offsetY * 10);
+
+  requestAnimationFrame(render);
+}
+
+// 描画関数
+function drawLayer(img, shiftX, shiftY) {
+  if (!img || !img.complete) return;
+  ctx.save();
+  ctx.translate(shiftX, shiftY);
+  ctx.drawImage(img, 0, 0);
+  ctx.restore();
+}
+</script>
+
+</body>
+</html>
