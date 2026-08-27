@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>VTuber スマホジャイロ対応モデル</title>
+  <style>
+    body {
+      margin: 0;
+      background-image: url('玄関前.png');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+      touch-action: none;
+    }
+    canvas {
+      background-color: transparent;
+      max-width: 100vw;
+      max-height: 100vh;
+    }
+    .gyro-btn {
+      position: absolute;
+      top: 20px;
+      z-index: 10;
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: bold;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid #fff;
+      border-radius: 25px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<button class="gyro-btn" id="gyroBtn">📱 傾きセンサーを有効化</button>
+<canvas id="vtuberCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById('vtuberCanvas');
+const ctx = canvas.getContext('2d');
+
+let offsetX = 0;
+let offsetY = 0;
+let raiseHandMode = 0;
+
+// ジャイロ機能の有効化処理（iOS対策）
+const gyroBtn = document.getElementById('gyroBtn');
+gyroBtn.addEventListener('click', async () => {
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    try {
+      const permission = await DeviceOrientationEvent.requestPermission();
+      if (permission === 'granted') {
+        window.addEventListener('deviceorientation', handleOrientation);
+        gyroBtn.style.display = 'none';
+      } else {
+        alert('センサーの使用が拒否されました');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  } else {
+    // Androidや非iOS環境
+    window.addEventListener('deviceorientation', handleOrientation);
+    gyroBtn.style.display = 'none';
+  }
+});
+
+// スマホの傾きイベント処理
+function handleOrientation(e) {
+  // gamma: 左右の傾き (-90 ~ 90)
+  // beta: 前後の傾き (-180 ~ 180)
+  const gamma = e.gamma || 0;
+  const beta = e.beta || 0;
+
+  // -1.0 〜 1.0 に正規化
+  offsetX = Math.min(Math.max(gamma / 30, -1), 1);
+  offsetY = Math.min(Math.max((beta - 45) / 30, -1), 1); // スマホを45度で持つ状態を基準値に設定
+}
+
+// タッチ操作でも動くフォールバック
+window.addEventListener('touchmove', (e) => {
+  if (e.touches.length > 0) {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.touches[0].clientX - rect.left;
+    const y = e.touches[0].clientY - rect.top;
+    offsetX = (x - canvas.width / 2) / (canvas.width / 2);
+    offsetY = (y - canvas.height / 2) / (canvas.height / 2);
+  }
+}, { passive: false });
+
+window.addEventListener('touchstart', () => {
+  raiseHandMode = (raiseHandMode + 1) % 4;
+});
+
+const images = {};
+const sources = {
+  foot_l: 'foot_l.png', foot_r: 'foot_r.png', leg: 'leg.png', body: 'body.png',
+  arm2_l: 'arm2_l.png', arm1_l: 'arm1_l.png', hand_l: 'hand_l.png',
+  arm2_r: 'arm2_r.png', arm1_r: 'arm1_r.png', hand_r: 'hand_r.png', head: 'head.png'
+};
+
+let loadedImages = 0;
+const numImages = Object.keys(sources).length;
+
+for (let src in sources) {
+  images[src] = new Image();
+  images[src].src = sources[src];
+  images[src].onload = () => {
+    if (++loadedImages >= numImages) {
+      canvas.width = images.body.naturalWidth || 1000;
+      canvas.height = images.body.naturalHeight || 1000;
+      requestAnimationFrame(render);
+    }
+  };
+}
+
+function render(timestamp) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
+  const breath = Math.sin(timestamp / 500) * 2;
+
+  // 1. 脚・足・胴体
+  drawParts(images.foot_l, centerX, centerY, 0, 0, 0);
+  drawParts(images.foot_r, centerX, centerY, 0, 0, 0);
+  drawParts(images.leg, centerX, centerY, offsetX * 3, offsetY * 2, 0);
+  drawParts(images.body, centerX, centerY, offsetX * 5, offsetY * 3 + breath, 0);
+
+  // 2. 右腕・左腕
+  const isRightUp = (raiseHandMode === 2 || raiseHandMode === 3);
+  if (isRightUp) {
+    const pivotX = centerX - 100, pivotY = centerY - 50, angle = Math.PI + (offsetX * 0.1);
+    drawParts(images.arm2_r, pivotX, pivotY, offsetX * 5, offsetY * 3, angle, pivotX, pivotY);
+    drawParts(images.arm1_r, pivotX, pivotY, offsetX * 5, offsetY * 3, angle, pivotX, pivotY);
+    drawParts(images.hand_r, pivotX, pivotY, offsetX * 5, offsetY * 3, angle, pivotX, pivotY);
+  } else {
+    drawParts(images.arm2_r, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03);
+    drawParts(images.arm1_r, centerX, centerY, offsetX * 12, offsetY * 6 + breath, offsetX * 0.05);
+    drawParts(images.hand_r, centerX, centerY, offsetX * 15, offsetY * 8 + breath, offsetX * 0.08);
+  }
+
+  const isLeftUp = (raiseHandMode === 1 || raiseHandMode === 3);
+  if (isLeftUp) {
+    const pivotX = centerX + 100, pivotY = centerY - 50, angle = -Math.PI + (offsetX * 0.1);
+    drawParts(images.arm2_l, pivotX, pivotY, offsetX * 5, offsetY * 3, angle, pivotX, pivotY);
+    drawParts(images.arm1_l, pivotX, pivotY, offsetX * 5, offsetY * 3, angle, pivotX, pivotY);
+    drawParts(images.hand_l, pivotX, pivotY, offsetX * 5, offsetY * 3, angle, pivotX, pivotY);
+  } else {
+    drawParts(images.arm2_l, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03);
+    drawParts(images.arm1_l, centerX, centerY, offsetX * 12, offsetY * 6 + breath, offsetX * 0.05);
+    drawParts(images.hand_l, centerX, centerY, offsetX * 15, offsetY * 8 + breath, offsetX * 0.08);
+  }
+
+  // 3. 頭部
+  drawParts(images.head, centerX, centerY, offsetX * 25, offsetY * 15 + breath * 0.5, offsetX * 0.06);
+
+  requestAnimationFrame(render);
+}
+
+function drawParts(img, posX, posY, shiftX, shiftY, angle, anchorX = canvas.width / 2, anchorY = canvas.height / 2) {
+  if (!img || !img.complete) return;
+  ctx.save();
+  ctx.translate(posX + shiftX, posY + shiftY);
+  ctx.rotate(angle);
+  ctx.drawImage(img, -anchorX, -anchorY);
+  ctx.restore();
+}
+</script>
+
+</body>
+</html>
