@@ -2,12 +2,12 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>VTuber マウス追従モデル（カーソル非表示＆矢印キー移動版）</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>VTuber スマホジャイロモデル</title>
   <style>
     body {
       margin: 0;
-      /* 同じフォルダにある画像を相対パスで指定 */
-      background-image: url('./玄関前.png');
+      background-image: url('./玄関前.png'); /* 同じフォルダの画像を指定 */
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
@@ -17,79 +17,103 @@
       height: 100vh;
       overflow: hidden;
       user-select: none;
-      cursor: none; /* 画面全体でマウスカーソルを非表示 */
+      touch-action: none; /* スマホの画面スクロールを防止 */
     }
     canvas {
       background-color: transparent;
       max-width: 100vw;
       max-height: 100vh;
-      cursor: none; /* キャンバス上でも非表示 */
     }
-    .guide {
+    .gyro-btn {
       position: absolute;
-      bottom: 20px;
-      background: rgba(0, 0, 0, 0.6);
-      color: white;
-      padding: 10px 20px;
-      border-radius: 20px;
-      font-family: sans-serif;
-      font-size: 14px;
-      pointer-events: none;
+      top: 20px;
+      z-index: 10;
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: bold;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.7);
+      border: 1px solid #fff;
+      border-radius: 25px;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
 
+<button class="gyro-btn" id="gyroBtn">📱 傾きセンサーを有効化</button>
 <canvas id="vtuberCanvas"></canvas>
-<div class="guide">⌨️ [矢印キー] キャラクター移動 / [Space] 位置リセット</div>
 
 <script>
 const canvas = document.getElementById('vtuberCanvas');
 const ctx = canvas.getContext('2d');
 
-let mouseX = 0;
-let mouseY = 0;
+let offsetX = 0; // マウス/ジャイロのX軸オフセット (-1〜1)
+let offsetY = 0; // マウス/ジャイロのY軸オフセット (-1〜1)
+let raiseHandMode = 0;
 
-// キャラクターの位置オフセット
-let charPosX = 0;
-let charPosY = 0;
-const moveSpeed = 15; // 矢印キーでの移動速度
-
-// マウス位置取得
-window.addEventListener('mousemove', (e) => {
-  const rect = canvas.getBoundingClientRect();
-  mouseX = e.clientX - rect.left;
-  mouseY = e.clientY - rect.top;
-});
-
-// キーボード操作（矢印キーで移動・スペースでリセット）
-window.addEventListener('keydown', (e) => {
-  if (e.key === 'ArrowLeft')  charPosX -= moveSpeed;
-  if (e.key === 'ArrowRight') charPosX += moveSpeed;
-  if (e.key === 'ArrowUp')    charPosY -= moveSpeed;
-  if (e.key === 'ArrowDown')  charPosY += moveSpeed;
-  
-  // スペースキーで位置リセット
-  if (e.key === ' ') {
-    charPosX = 0;
-    charPosY = 0;
+// ジャイロ有効化処理（iOS対策）
+const gyroBtn = document.getElementById('gyroBtn');
+gyroBtn.addEventListener('click', async () => {
+  // DeviceOrientationEvent.requestPermission が存在する場合（iOS）
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    try {
+      const permission = await DeviceOrientationEvent.requestPermission();
+      if (permission === 'granted') {
+        window.addEventListener('deviceorientation', handleOrientation);
+        gyroBtn.style.display = 'none'; // ボタンを隠す
+      } else {
+        alert('センサーの使用が拒否されました');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  } else {
+    // Androidや非iOS環境（自動的にイベントリスナーを追加）
+    window.addEventListener('deviceorientation', handleOrientation);
+    gyroBtn.style.display = 'none'; // ボタンを隠す
   }
 });
 
-// 画像アセット定義（GitHub Pages用に相対パス ./ を追加）
+// スマホの傾きイベント処理
+function handleOrientation(e) {
+  // gamma: 左右の傾き (-90 〜 90) -> キャラクターの左右の向き（X軸）
+  // beta: 前後の傾き (-180 〜 180) -> キャラクターの上下の向き（Y軸）
+  
+  const gamma = e.gamma || 0;
+  const beta = e.beta || 0;
+
+  // 傾き角度を -1.0 〜 1.0 の範囲に正規化（キャラクター移動用）
+  // スマホを30度傾けたときが最大移動量になるように設定
+  offsetX = Math.min(Math.max(gamma / 30, -1), 1);
+  offsetY = Math.min(Math.max((beta - 45) / 30, -1), 1); // スマホを45度で持つ状態を基準値に設定
+}
+
+// PC用マウスイベント
+window.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
+  const mouseY = e.clientY - rect.top;
+  
+  // マウス位置をキャンバス中心からの相対座標に正規化 (-1.0 〜 1.0)
+  offsetX = (mouseX - canvas.width / 2) / (canvas.width / 2);
+  offsetY = (mouseY - canvas.height / 2) / (canvas.height / 2);
+});
+
+// タッチ/クリックでポーズ切替
+window.addEventListener('touchstart', () => {
+  raiseHandMode = (raiseHandMode + 1) % 4;
+});
+window.addEventListener('click', () => {
+  raiseHandMode = (raiseHandMode + 1) % 4;
+});
+
+// 画像アセット定義
 const images = {};
 const sources = {
-  foot_l: './foot_l.png',
-  foot_r: './foot_r.png',
-  leg: './leg.png',
-  body: './body.png',
-  arm2_l: './arm2_l.png',
-  arm1_l: './arm1_l.png',
-  hand_l: './hand_l.png',
-  arm2_r: './arm2_r.png',
-  arm1_r: './arm1_r.png',
-  hand_r: './hand_r.png',
-  head: './head.png'
+  foot_l: './foot_l.png', foot_r: './foot_r.png', leg: './leg.png', body: './body.png',
+  arm2_l: './arm2_l.png', arm1_l: './arm1_l.png', hand_l: './hand_l.png',
+  arm2_r: './arm2_r.png', arm1_r: './arm1_r.png', hand_r: './hand_r.png', head: './head.png'
 };
 
 let loadedImages = 0;
@@ -100,63 +124,63 @@ for (let src in sources) {
   images[src].src = sources[src];
   images[src].onload = () => {
     if (++loadedImages >= numImages) {
-      // 胴体画像のサイズをキャンバスサイズに設定
       canvas.width = images.body.naturalWidth || 1000;
       canvas.height = images.body.naturalHeight || 1000;
-      mouseX = canvas.width / 2;
-      mouseY = canvas.height / 2;
       requestAnimationFrame(render);
     }
   };
 }
 
-// 描画メインループ
-function render() {
+function render(timestamp) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   const centerX = canvas.width / 2;
   const centerY = canvas.height / 2;
+  const breath = Math.sin(timestamp / 500) * 2;
 
-  // マウス追従用オフセット (-1 〜 1)
-  const offsetX = (mouseX - centerX) / centerX;
-  const offsetY = (mouseY - centerY) / centerY;
+  // 1. 脚・足・胴体
+  drawParts(images.foot_l, centerX, centerY, 0, 0, 0);
+  drawParts(images.foot_r, centerX, centerY, 0, 0, 0);
+  drawParts(images.leg, centerX, centerY, offsetX * 3, offsetY * 2, 0);
+  drawParts(images.body, centerX, centerY, offsetX * 5, offsetY * 3 + breath, 0);
 
-  // 全パーツの共通ベース位置（キーボード移動量を加算）
-  const baseShiftX = charPosX;
-  const baseShiftY = charPosY;
+  // 2. 右腕・左腕
+  const isRightUp = (raiseHandMode === 2 || raiseHandMode === 3);
+  if (isRightUp) {
+    const pivotX = centerX - 100, pivotY = centerY - 50, angle = Math.PI + (offsetX * 0.1);
+    drawParts(images.arm2_r, pivotX, pivotY, offsetX * 5, offsetY * 3, angle, pivotX, pivotY);
+    drawParts(images.arm1_r, pivotX, pivotY, offsetX * 5, offsetY * 3, angle, pivotX, pivotY);
+    drawParts(images.hand_r, pivotX, pivotY, offsetX * 5, offsetY * 3, angle, pivotX, pivotY);
+  } else {
+    drawParts(images.arm2_r, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03);
+    drawParts(images.arm1_r, centerX, centerY, offsetX * 12, offsetY * 6 + breath, offsetX * 0.05);
+    drawParts(images.hand_r, centerX, centerY, offsetX * 15, offsetY * 8 + breath, offsetX * 0.08);
+  }
 
-  // 1. 脚・足
-  drawLayer(images.foot_l, baseShiftX, baseShiftY);
-  drawLayer(images.foot_r, baseShiftX, baseShiftY);
-  drawLayer(images.leg, baseShiftX + offsetX * 2, baseShiftY + offsetY * 2);
+  const isLeftUp = (raiseHandMode === 1 || raiseHandMode === 3);
+  if (isLeftUp) {
+    const pivotX = centerX + 100, pivotY = centerY - 50, angle = -Math.PI + (offsetX * 0.1);
+    drawParts(images.arm2_l, pivotX, pivotY, offsetX * 5, offsetY * 3, angle, pivotX, pivotY);
+    drawParts(images.arm1_l, pivotX, pivotY, offsetX * 5, offsetY * 3, angle, pivotX, pivotY);
+    drawParts(images.hand_l, pivotX, pivotY, offsetX * 5, offsetY * 3, angle, pivotX, pivotY);
+  } else {
+    drawParts(images.arm2_l, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03);
+    drawParts(images.arm1_l, centerX, centerY, offsetX * 12, offsetY * 6 + breath, offsetX * 0.05);
+    drawParts(images.hand_l, centerX, centerY, offsetX * 15, offsetY * 8 + breath, offsetX * 0.08);
+  }
 
-  // 2. 胴体
-  drawLayer(images.body, baseShiftX + offsetX * 4, baseShiftY + offsetY * 3);
-
-  // 3. 空中分離腕（バグ再現位置 + キー移動）
-  const floatingY = -280 + offsetY * 20;
-  const floatingX = offsetX * 15;
-
-  drawLayer(images.arm2_r, baseShiftX + floatingX, baseShiftY + floatingY);
-  drawLayer(images.arm1_r, baseShiftX + floatingX, baseShiftY + floatingY);
-  drawLayer(images.hand_r, baseShiftX + floatingX, baseShiftY + floatingY);
-
-  drawLayer(images.arm2_l, baseShiftX + floatingX, baseShiftY + floatingY);
-  drawLayer(images.arm1_l, baseShiftX + floatingX, baseShiftY + floatingY);
-  drawLayer(images.hand_l, baseShiftX + floatingX, baseShiftY + floatingY);
-
-  // 4. 頭部
-  drawLayer(images.head, baseShiftX + offsetX * 15, baseShiftY + offsetY * 10);
+  // 3. 頭部
+  drawParts(images.head, centerX, centerY, offsetX * 25, offsetY * 15 + breath * 0.5, offsetX * 0.06);
 
   requestAnimationFrame(render);
 }
 
-// 描画関数
-function drawLayer(img, shiftX, shiftY) {
+function drawParts(img, posX, posY, shiftX, shiftY, angle, anchorX = canvas.width / 2, anchorY = canvas.height / 2) {
   if (!img || !img.complete) return;
   ctx.save();
-  ctx.translate(shiftX, shiftY);
-  ctx.drawImage(img, 0, 0);
+  ctx.translate(posX + shiftX, posY + shiftY);
+  ctx.rotate(angle);
+  ctx.drawImage(img, -anchorX, -anchorY);
   ctx.restore();
 }
 </script>
