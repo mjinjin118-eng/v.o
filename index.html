@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>VTuber 常時音声認識モデル</title>
+  <title>VTuber 常時音声認識モデル（干渉防止版）</title>
   <style>
     body {
       margin: 0;
@@ -80,6 +80,7 @@ let raiseHandMode = 0;
 const voiceSources = ['./voice1.wav', './voice2.wav', './voice3.wav'];
 const voices = voiceSources.map(src => new Audio(src));
 let currentVoice = null;
+let isSpeaking = false; // キャラクターが発話中かのフラグ
 
 // --- 2. ポーズ切替ボタン ---
 const poseBtn = document.getElementById('poseBtn');
@@ -88,13 +89,12 @@ poseBtn.addEventListener('click', (e) => {
   raiseHandMode = (raiseHandMode + 1) % 4;
 });
 
-// --- 3. 強化型常時音声認識＆ジャイロ ---
+// --- 3. 強化型常時音声認識＆ジャイロ（干渉制御付き） ---
 const startBtn = document.getElementById('startBtn');
 const statusDiv = document.getElementById('status');
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 let recognition = null;
-let isUserStopped = false; // ユーザーが意図して止めたかのフラグ
 
 startBtn.addEventListener('click', () => {
   // ジャイロ有効化
@@ -112,70 +112,97 @@ startBtn.addEventListener('click', () => {
     return;
   }
 
-  startBtn.style.display = 'none'; // ボタンを非表示化
+  startBtn.style.display = 'none';
   initSpeechRecognition();
 });
 
 function initSpeechRecognition() {
   recognition = new SpeechRecognition();
   recognition.lang = 'ja-JP';
-  recognition.continuous = true;     // 連続認識
-  recognition.interimResults = false; // 確定結果のみ取得
+  recognition.continuous = true;
+  recognition.interimResults = false;
 
   recognition.onstart = () => {
-    statusDiv.textContent = '状態: 🟢 常に聴き取り中...（話しかけてね）';
-    statusDiv.style.background = 'rgba(0, 150, 0, 0.6)';
+    if (!isSpeaking) {
+      statusDiv.textContent = '状態: 🟢 常に聴き取り中...（話しかけてね）';
+      statusDiv.style.background = 'rgba(0, 150, 0, 0.6)';
+    }
   };
 
   recognition.onresult = (event) => {
+    // キャラクター発話中は次の入力を無視
+    if (isSpeaking) return;
+
     const results = event.results;
     for (let i = event.resultIndex; i < results.length; i++) {
       if (results[i].isFinal) {
         const text = results[i][0].transcript.trim();
         statusDiv.textContent = `反応: 「${text}」`;
 
-        // ランダムボイス再生
-        if (currentVoice) {
-          currentVoice.pause();
-          currentVoice.currentTime = 0;
-        }
-        const randomIndex = Math.floor(Math.random() * voices.length);
-        currentVoice = voices[randomIndex];
-        currentVoice.play().catch(err => console.log('ボイス再生エラー:', err));
+        playRandomVoice();
       }
     }
   };
 
-  // エラーが起きても止まらないように処理
   recognition.onerror = (e) => {
     console.warn('音声認識通知:', e.error);
-    if (e.error === 'not-allowed') {
-      statusDiv.textContent = 'エラー: マイクの使用が拒否されました';
-      isUserStopped = true;
-    }
   };
 
-  // 自動切断されたら0.3秒後に勝手に即時再起動
   recognition.onend = () => {
-    if (!isUserStopped) {
-      statusDiv.textContent = '状態: 🟡 マイク再接続中...';
-      statusDiv.style.background = 'rgba(200, 150, 0, 0.6)';
+    // ボイス再生中（isSpeaking === true）でなければ自動再起動
+    if (!isSpeaking) {
       setTimeout(() => {
         try {
           recognition.start();
-        } catch (err) {
-          console.log('再起動待機中...');
-        }
+        } catch (err) {}
       }, 300);
     }
   };
 
-  // 初回スタート
   try {
     recognition.start();
   } catch (e) {
     console.error(e);
   }
+}
+
+// ランダムボイス再生とマイク制御
+function playRandomVoice() {
+  isSpeaking = true;
+  
+  // 一時的に音声認識を停止してマイクの干渉を防ぐ
+  try {
+    recognition.stop();
+  } catch(e) {}
+
+  if (currentVoice) {
+    currentVoice.pause();
+    currentVoice.currentTime = 0;
+  }
+
+  const randomIndex = Math.floor(Math.random() * voices.length);
+  currentVoice = voices[randomIndex];
+
+  statusDiv.textContent = `🔊 ボイス${randomIndex + 1} 再生中...`;
+  statusDiv.style.background = 'rgba(0, 100, 200, 0.6)';
+
+  // 音声再生終了時のイベント
+  currentVoice.onended = () => {
+    isSpeaking = false;
+    statusDiv.textContent = '状態: 🟢 常に聴き取り中...';
+    statusDiv.style.background = 'rgba(0, 150, 0, 0.6)';
+    
+    // 再生が終わったらマイク認識を再開
+    try {
+      recognition.start();
+    } catch(e) {}
+  };
+
+  currentVoice.play().catch(err => {
+    console.log('ボイス再生エラー:', err);
+    isSpeaking = false;
+    try { recognition.start(); } catch(e) {}
+  });
 }
 
 // PC用マウスフォールバック
