@@ -20,29 +20,29 @@
       touch-action: none;
     }
 
-    /* 1. 起動確認ダイアログ（最前面） */
+    /* 1. 起動確認画面（最前面の背景を白に変更） */
     #startupDialog {
       position: fixed;
       top: 0;
       left: 0;
       width: 100vw;
       height: 100vh;
-      background-color: rgba(0, 0, 0, 0.85);
+      background-color: #ffffff; /* ボックス以外の背景を真っ白に設定 */
       z-index: 200;
       display: flex;
       justify-content: center;
       align-items: center;
     }
 
-    /* 変更点: 背景色を白（#ffffff）にし、文字色を黒（#000）に変更 */
+    /* ボックスは元のダーク系の色・デザインに復旧 */
     .startup-box {
-      background: rgba(255, 255, 255, 0.95);
+      background: rgba(15, 23, 42, 0.95);
       border: 2px solid #00f0ff;
       box-shadow: 0 0 25px rgba(0, 240, 255, 0.5);
       border-radius: 16px;
       padding: 30px 40px;
       text-align: center;
-      color: #000;
+      color: #fff;
       font-family: sans-serif;
       max-width: 80vw;
     }
@@ -54,23 +54,22 @@
       letter-spacing: 1px;
     }
 
-    /* 変更点: ボタンのデザインを白背景に合わせて調整 */
     .launch-btn {
       padding: 14px 32px;
       font-size: 18px;
       font-weight: bold;
-      color: #0077ff;
-      background: transparent;
-      border: 2px solid #0077ff;
+      color: #00f0ff;
+      background: rgba(0, 0, 0, 0.6);
+      border: 2px solid #00f0ff;
       border-radius: 30px;
       cursor: pointer;
       transition: all 0.2s ease;
-      box-shadow: 0 0 10px rgba(0, 119, 255, 0.2);
+      box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
     }
 
     .launch-btn:active {
-      background: #0077ff;
-      color: #fff;
+      background: #00f0ff;
+      color: #000;
       transform: scale(0.95);
     }
 
@@ -167,7 +166,7 @@ launchBtn.addEventListener('click', () => {
   // 2. 起動音を再生
   startAudio.play().catch(err => console.log('音声再生エラー:', err));
 
-  // 3. 変更点: 8秒間（8000ms）起動画面を表示してからフェードアウト
+  // 3. 8秒間（8000ms）起動画面を表示してからフェードアウト
   setTimeout(() => {
     splashScreen.style.opacity = '0';
     setTimeout(() => {
