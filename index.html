@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>VTuber 常時音声認識モデル（起動音付き）</title>
+  <title>VTuber 常時音声認識モデル</title>
   <style>
     body {
       margin: 0;
@@ -20,6 +20,59 @@
       touch-action: none;
     }
 
+    /* 1. 起動確認ダイアログ（最前面） */
+    #startupDialog {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: rgba(0, 0, 0, 0.85);
+      z-index: 200;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .startup-box {
+      background: rgba(15, 23, 42, 0.95);
+      border: 2px solid #00f0ff;
+      box-shadow: 0 0 25px rgba(0, 240, 255, 0.5);
+      border-radius: 16px;
+      padding: 30px 40px;
+      text-align: center;
+      color: #fff;
+      font-family: sans-serif;
+      max-width: 80vw;
+    }
+
+    .startup-title {
+      font-size: 20px;
+      font-weight: bold;
+      margin-bottom: 20px;
+      letter-spacing: 1px;
+    }
+
+    .launch-btn {
+      padding: 14px 32px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #00f0ff;
+      background: rgba(0, 0, 0, 0.6);
+      border: 2px solid #00f0ff;
+      border-radius: 30px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+    }
+
+    .launch-btn:active {
+      background: #00f0ff;
+      color: #000;
+      transform: scale(0.95);
+    }
+
+    /* 2. 起動画面（スプラッシュ画面） */
     #splashScreen {
       position: fixed;
       top: 0;
@@ -32,9 +85,9 @@
       background-position: center;
       background-repeat: no-repeat;
       z-index: 100;
+      display: none; /* 最初は非表示 */
       opacity: 1;
       transition: opacity 0.8s ease;
-      pointer-events: none;
     }
 
     canvas {
@@ -78,6 +131,15 @@
 </head>
 <body>
 
+<!-- 1. 確認ダイアログ -->
+<div id="startupDialog">
+  <div class="startup-box">
+    <div class="startup-title">V.O Systemを起動しますか？</div>
+    <button class="launch-btn" id="launchBtn">システム起動</button>
+  </div>
+</div>
+
+<!-- 2. 起動画面（v.o System.png） -->
 <div id="splashScreen"></div>
 
 <div class="ui-container">
@@ -89,16 +151,27 @@
 <canvas id="vtuberCanvas"></canvas>
 
 <script>
-const SPLASH_DISPLAY_SECONDS = 3;
+const startAudio = new Audio('./system_start.wav');
+const startupDialog = document.getElementById('startupDialog');
+const splashScreen = document.getElementById('splashScreen');
+const launchBtn = document.getElementById('launchBtn');
 
-window.addEventListener('DOMContentLoaded', () => {
-  const splash = document.getElementById('splashScreen');
+// 「システム起動」ボタンを押したときの処理
+launchBtn.addEventListener('click', () => {
+  // 1. 確認画面を消し、起動画面を表示
+  startupDialog.style.display = 'none';
+  splashScreen.style.display = 'block';
+
+  // 2. 起動音を再生
+  startAudio.play().catch(err => console.log('音声再生エラー:', err));
+
+  // 3. 4秒間（4000ms）起動画面を表示してからフェードアウト
   setTimeout(() => {
-    splash.style.opacity = '0';
+    splashScreen.style.opacity = '0';
     setTimeout(() => {
-      splash.style.display = 'none';
-    }, 800);
-  }, SPLASH_DISPLAY_SECONDS * 1000);
+      splashScreen.style.display = 'none';
+    }, 800); // フェードアウトアニメーション（0.8秒）
+  }, 4000);
 });
 
 const canvas = document.getElementById('vtuberCanvas');
@@ -108,8 +181,7 @@ let offsetX = 0;
 let offsetY = 0;
 let raiseHandMode = 0;
 
-// --- 1. ボイス・起動音の準備 ---
-const startAudio = new Audio('system_start.wav'); // 起動音
+// --- 1. ランダムボイス（WAV） ---
 const voiceSources = ['./voice1.wav', './voice2.wav', './voice3.wav'];
 const voices = voiceSources.map(src => new Audio(src));
 let currentVoice = null;
@@ -130,27 +202,6 @@ const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecogni
 let recognition = null;
 
 startBtn.addEventListener('click', () => {
-  startBtn.style.display = 'none';
-
-  // 1. 起動音を再生
-  isSpeaking = true;
-  statusDiv.textContent = '状態: 🔊 システム起動中...';
-  statusDiv.style.background = 'rgba(0, 100, 200, 0.6)';
-
-  startAudio.play().then(() => {
-    // 起動音再生開始
-  }).catch(err => {
-    console.log('起動音再生エラー:', err);
-    // 自動再生ポリシー等で再生失敗した場合はそのまま認識に進む
-    onStartAudioEnd();
-  });
-
-  // 起動音が鳴り終わったらマイク音声認識を開始
-  startAudio.onended = () => {
-    onStartAudioEnd();
-  };
-
-  // ジャイロ有効化
   if (typeof window.DeviceOrientationEvent !== 'undefined') {
     window.addEventListener('deviceorientation', (e) => {
       const gamma = e.gamma || 0;
@@ -159,16 +210,15 @@ startBtn.addEventListener('click', () => {
       offsetY = Math.min(Math.max((beta - 45) / 30, -1), 1);
     });
   }
-});
 
-function onStartAudioEnd() {
-  isSpeaking = false;
   if (!SpeechRecognition) {
     statusDiv.textContent = 'エラー: お使いのブラウザは音声認識非対応です';
     return;
   }
+
+  startBtn.style.display = 'none';
   initSpeechRecognition();
-}
+});
 
 function initSpeechRecognition() {
   recognition = new SpeechRecognition();
@@ -297,7 +347,7 @@ function render(timestamp) {
     drawParts(images.hand_r, pivotX, pivotY, offsetX * 5, offsetY * 3, angle, pivotX, pivotY);
   } else {
     drawParts(images.arm2_r, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03);
-    drawParts(images.arm1_r, centerX, centerY, offsetX * 12, offsetY * 6 + breath, offsetX * 0.05);
+    drawParts(images.arm1_r, centerX, centerY, offsetX * 12, offsetY * 6 + breath, offsetX * 0.08);
     drawParts(images.hand_r, centerX, centerY, offsetX * 15, offsetY * 8 + breath, offsetX * 0.08);
   }
 
