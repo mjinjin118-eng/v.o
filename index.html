@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>VTuber Android/PC特化モデル（WAV対応）</title>
+  <title>VTuber 常時音声認識モデル</title>
   <style>
     body {
       margin: 0;
@@ -49,20 +49,21 @@
     }
     #status {
       color: white;
-      background: rgba(0,0,0,0.5);
-      padding: 5px 10px;
-      border-radius: 10px;
+      background: rgba(0,0,0,0.6);
+      padding: 6px 14px;
+      border-radius: 12px;
       font-size: 14px;
       pointer-events: none;
+      text-align: center;
     }
   </style>
 </head>
 <body>
 
 <div class="ui-container">
-  <button class="btn" id="startBtn">🎤 音声認識＆センサーを有効化</button>
+  <button class="btn" id="startBtn">🎤 常時音声認識＆センサー開始</button>
   <button class="btn" id="poseBtn" style="background: rgba(0, 100, 200, 0.8);">🙋 手を上げる / ポーズ切替</button>
-  <div id="status">状態: 停止中</div>
+  <div id="status">状態: 停止中（ボタンを押してください）</div>
 </div>
 
 <canvas id="vtuberCanvas"></canvas>
@@ -73,27 +74,30 @@ const ctx = canvas.getContext('2d');
 
 let offsetX = 0;
 let offsetY = 0;
-let raiseHandMode = 0; // 0:通常, 1:左手, 2:右手, 3:両手
+let raiseHandMode = 0;
 
-// --- 1. ランダムボイスの準備（WAV形式） ---
+// --- 1. ランダムボイス（WAV） ---
 const voiceSources = ['./voice1.wav', './voice2.wav', './voice3.wav'];
 const voices = voiceSources.map(src => new Audio(src));
 let currentVoice = null;
 
-// --- 2. 手を上げるボタンの処理 ---
+// --- 2. ポーズ切替ボタン ---
 const poseBtn = document.getElementById('poseBtn');
 poseBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   raiseHandMode = (raiseHandMode + 1) % 4;
 });
 
-// --- 3. センサー＆音声認識の有効化 ---
+// --- 3. 強化型常時音声認識＆ジャイロ ---
 const startBtn = document.getElementById('startBtn');
 const statusDiv = document.getElementById('status');
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
+let recognition = null;
+let isUserStopped = false; // ユーザーが意図して止めたかのフラグ
+
 startBtn.addEventListener('click', () => {
-  // ジャイロセンサーの有効化
+  // ジャイロ有効化
   if (typeof window.DeviceOrientationEvent !== 'undefined') {
     window.addEventListener('deviceorientation', (e) => {
       const gamma = e.gamma || 0;
@@ -103,20 +107,24 @@ startBtn.addEventListener('click', () => {
     });
   }
 
-  // 音声認識の開始
   if (!SpeechRecognition) {
-    statusDiv.textContent = 'エラー: 音声認識非対応ブラウザです';
+    statusDiv.textContent = 'エラー: お使いのブラウザは音声認識非対応です';
     return;
   }
 
-  const recognition = new SpeechRecognition();
+  startBtn.style.display = 'none'; // ボタンを非表示化
+  initSpeechRecognition();
+});
+
+function initSpeechRecognition() {
+  recognition = new SpeechRecognition();
   recognition.lang = 'ja-JP';
-  recognition.continuous = true;
-  recognition.interimResults = false;
+  recognition.continuous = true;     // 連続認識
+  recognition.interimResults = false; // 確定結果のみ取得
 
   recognition.onstart = () => {
-    startBtn.style.display = 'none';
-    statusDiv.textContent = '状態: 話しかけを待っています...';
+    statusDiv.textContent = '状態: 🟢 常に聴き取り中...（話しかけてね）';
+    statusDiv.style.background = 'rgba(0, 150, 0, 0.6)';
   };
 
   recognition.onresult = (event) => {
@@ -124,31 +132,51 @@ startBtn.addEventListener('click', () => {
     for (let i = event.resultIndex; i < results.length; i++) {
       if (results[i].isFinal) {
         const text = results[i][0].transcript.trim();
-        statusDiv.textContent = `聴き取り: 「${text}」`;
+        statusDiv.textContent = `反応: 「${text}」`;
 
-        // WAV音源をランダム再生
+        // ランダムボイス再生
         if (currentVoice) {
           currentVoice.pause();
           currentVoice.currentTime = 0;
         }
         const randomIndex = Math.floor(Math.random() * voices.length);
         currentVoice = voices[randomIndex];
-        currentVoice.play().catch(err => console.log('再生エラー:', err));
+        currentVoice.play().catch(err => console.log('ボイス再生エラー:', err));
       }
     }
   };
 
+  // エラーが起きても止まらないように処理
   recognition.onerror = (e) => {
-    console.error('音声認識エラー:', e.error);
-    statusDiv.textContent = `エラー: ${e.error}`;
+    console.warn('音声認識通知:', e.error);
+    if (e.error === 'not-allowed') {
+      statusDiv.textContent = 'エラー: マイクの使用が拒否されました';
+      isUserStopped = true;
+    }
   };
 
+  // 自動切断されたら0.3秒後に勝手に即時再起動
   recognition.onend = () => {
-    try { recognition.start(); } catch(e) {}
+    if (!isUserStopped) {
+      statusDiv.textContent = '状態: 🟡 マイク再接続中...';
+      statusDiv.style.background = 'rgba(200, 150, 0, 0.6)';
+      setTimeout(() => {
+        try {
+          recognition.start();
+        } catch (err) {
+          console.log('再起動待機中...');
+        }
+      }, 300);
+    }
   };
 
-  recognition.start();
-});
+  // 初回スタート
+  try {
+    recognition.start();
+  } catch (e) {
+    console.error(e);
+  }
+}
 
 // PC用マウスフォールバック
 window.addEventListener('mousemove', (e) => {
@@ -158,7 +186,7 @@ window.addEventListener('mousemove', (e) => {
   offsetY = ((e.clientY - rect.top) - canvas.height / 2) / (canvas.height / 2);
 });
 
-// --- 画像読み込みと描画ループ ---
+// --- 画像描画ループ ---
 const images = {};
 const sources = {
   foot_l: './foot_l.png', foot_r: './foot_r.png', leg: './leg.png', body: './body.png',
