@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>VTuber 常時音声認識モデル（20ボイス対応）</title>
+  <title>VTuber 常時音声認識モデル（起動音付き）</title>
   <style>
     body {
       margin: 0;
@@ -108,8 +108,9 @@ let offsetX = 0;
 let offsetY = 0;
 let raiseHandMode = 0;
 
-// --- 1. ランダムボイス20個の準備（WAV） ---
-const voiceSources = Array.from({ length: 20 }, (_, i) => `./voice${i + 1}.wav`);
+// --- 1. ボイス・起動音の準備 ---
+const startAudio = new Audio('./システム 起動….wav'); // 起動音
+const voiceSources = ['./voice1.wav', './voice2.wav', './voice3.wav'];
 const voices = voiceSources.map(src => new Audio(src));
 let currentVoice = null;
 let isSpeaking = false;
@@ -129,6 +130,27 @@ const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecogni
 let recognition = null;
 
 startBtn.addEventListener('click', () => {
+  startBtn.style.display = 'none';
+
+  // 1. 起動音を再生
+  isSpeaking = true;
+  statusDiv.textContent = '状態: 🔊 システム起動中...';
+  statusDiv.style.background = 'rgba(0, 100, 200, 0.6)';
+
+  startAudio.play().then(() => {
+    // 起動音再生開始
+  }).catch(err => {
+    console.log('起動音再生エラー:', err);
+    // 自動再生ポリシー等で再生失敗した場合はそのまま認識に進む
+    onStartAudioEnd();
+  });
+
+  // 起動音が鳴り終わったらマイク音声認識を開始
+  startAudio.onended = () => {
+    onStartAudioEnd();
+  };
+
+  // ジャイロ有効化
   if (typeof window.DeviceOrientationEvent !== 'undefined') {
     window.addEventListener('deviceorientation', (e) => {
       const gamma = e.gamma || 0;
@@ -137,15 +159,16 @@ startBtn.addEventListener('click', () => {
       offsetY = Math.min(Math.max((beta - 45) / 30, -1), 1);
     });
   }
+});
 
+function onStartAudioEnd() {
+  isSpeaking = false;
   if (!SpeechRecognition) {
     statusDiv.textContent = 'エラー: お使いのブラウザは音声認識非対応です';
     return;
   }
-
-  startBtn.style.display = 'none';
   initSpeechRecognition();
-});
+}
 
 function initSpeechRecognition() {
   recognition = new SpeechRecognition();
