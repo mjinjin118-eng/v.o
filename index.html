@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>VTuber 常時音声認識モデル（干渉防止版）</title>
+  <title>VTuber 常時音声認識モデル（20ボイス対応）</title>
   <style>
     body {
       margin: 0;
@@ -19,6 +19,24 @@
       user-select: none;
       touch-action: none;
     }
+
+    #splashScreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: #000;
+      background-image: url('./v.o System.png');
+      background-size: contain;
+      background-position: center;
+      background-repeat: no-repeat;
+      z-index: 100;
+      opacity: 1;
+      transition: opacity 0.8s ease;
+      pointer-events: none;
+    }
+
     canvas {
       background-color: transparent;
       max-width: 100vw;
@@ -60,6 +78,8 @@
 </head>
 <body>
 
+<div id="splashScreen"></div>
+
 <div class="ui-container">
   <button class="btn" id="startBtn">🎤 常時音声認識＆センサー開始</button>
   <button class="btn" id="poseBtn" style="background: rgba(0, 100, 200, 0.8);">🙋 手を上げる / ポーズ切替</button>
@@ -69,6 +89,18 @@
 <canvas id="vtuberCanvas"></canvas>
 
 <script>
+const SPLASH_DISPLAY_SECONDS = 3;
+
+window.addEventListener('DOMContentLoaded', () => {
+  const splash = document.getElementById('splashScreen');
+  setTimeout(() => {
+    splash.style.opacity = '0';
+    setTimeout(() => {
+      splash.style.display = 'none';
+    }, 800);
+  }, SPLASH_DISPLAY_SECONDS * 1000);
+});
+
 const canvas = document.getElementById('vtuberCanvas');
 const ctx = canvas.getContext('2d');
 
@@ -76,11 +108,11 @@ let offsetX = 0;
 let offsetY = 0;
 let raiseHandMode = 0;
 
-// --- 1. ランダムボイス（WAV） ---
-const voiceSources = ['./voice1.wav', './voice2.wav', './voice3.wav'];
+// --- 1. ランダムボイス20個の準備（WAV） ---
+const voiceSources = Array.from({ length: 20 }, (_, i) => `./voice${i + 1}.wav`);
 const voices = voiceSources.map(src => new Audio(src));
 let currentVoice = null;
-let isSpeaking = false; // キャラクターが発話中かのフラグ
+let isSpeaking = false;
 
 // --- 2. ポーズ切替ボタン ---
 const poseBtn = document.getElementById('poseBtn');
@@ -89,7 +121,7 @@ poseBtn.addEventListener('click', (e) => {
   raiseHandMode = (raiseHandMode + 1) % 4;
 });
 
-// --- 3. 強化型常時音声認識＆ジャイロ（干渉制御付き） ---
+// --- 3. 音声認識＆ジャイロ ---
 const startBtn = document.getElementById('startBtn');
 const statusDiv = document.getElementById('status');
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -97,7 +129,6 @@ const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecogni
 let recognition = null;
 
 startBtn.addEventListener('click', () => {
-  // ジャイロ有効化
   if (typeof window.DeviceOrientationEvent !== 'undefined') {
     window.addEventListener('deviceorientation', (e) => {
       const gamma = e.gamma || 0;
@@ -130,7 +161,6 @@ function initSpeechRecognition() {
   };
 
   recognition.onresult = (event) => {
-    // キャラクター発話中は次の入力を無視
     if (isSpeaking) return;
 
     const results = event.results;
@@ -138,7 +168,6 @@ function initSpeechRecognition() {
       if (results[i].isFinal) {
         const text = results[i][0].transcript.trim();
         statusDiv.textContent = `反応: 「${text}」`;
-
         playRandomVoice();
       }
     }
@@ -149,7 +178,6 @@ function initSpeechRecognition() {
   };
 
   recognition.onend = () => {
-    // ボイス再生中（isSpeaking === true）でなければ自動再起動
     if (!isSpeaking) {
       setTimeout(() => {
         try {
@@ -166,14 +194,9 @@ function initSpeechRecognition() {
   }
 }
 
-// ランダムボイス再生とマイク制御
 function playRandomVoice() {
   isSpeaking = true;
-  
-  // 一時的に音声認識を停止してマイクの干渉を防ぐ
-  try {
-    recognition.stop();
-  } catch(e) {}
+  try { recognition.stop(); } catch(e) {}
 
   if (currentVoice) {
     currentVoice.pause();
@@ -186,16 +209,11 @@ function playRandomVoice() {
   statusDiv.textContent = `🔊 ボイス${randomIndex + 1} 再生中...`;
   statusDiv.style.background = 'rgba(0, 100, 200, 0.6)';
 
-  // 音声再生終了時のイベント
   currentVoice.onended = () => {
     isSpeaking = false;
     statusDiv.textContent = '状態: 🟢 常に聴き取り中...';
     statusDiv.style.background = 'rgba(0, 150, 0, 0.6)';
-    
-    // 再生が終わったらマイク認識を再開
-    try {
-      recognition.start();
-    } catch(e) {}
+    try { recognition.start(); } catch(e) {}
   };
 
   currentVoice.play().catch(err => {
