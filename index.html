@@ -20,7 +20,7 @@
       touch-action: none;
     }
 
-    /* 1. パスワード入力ダイアログ（v.o System2.png を背景に指定） */
+    /* 1. パスワード確認ダイアログ */
     #startupDialog {
       position: fixed;
       top: 0;
@@ -180,7 +180,7 @@
 
 <script>
 const startAudio = new Audio('./system_start.wav');
-const clickAudio = new Audio('./fx.wav'); // ボタン操作音
+const clickAudio = new Audio('./fx.wav');
 
 const startupDialog = document.getElementById('startupDialog');
 const splashScreen = document.getElementById('splashScreen');
@@ -188,9 +188,7 @@ const launchBtn = document.getElementById('launchBtn');
 const passInput = document.getElementById('passInput');
 const passError = document.getElementById('passError');
 
-// パスワード判定・起動処理
 function checkPasswordAndLaunch() {
-  // クリック効果音の再生
   clickAudio.currentTime = 0;
   clickAudio.play().catch(err => console.log('SE再生エラー:', err));
 
@@ -206,14 +204,13 @@ function checkPasswordAndLaunch() {
       setTimeout(() => {
         splashScreen.style.display = 'none';
       }, 800);
-    }, 8000); // 8秒間表示
+    }, 8000);
   } else {
     passError.textContent = 'パスワードが違います';
     passInput.value = '';
   }
 }
 
-// ボタン押下・Enterキー押下時のイベント
 launchBtn.addEventListener('click', checkPasswordAndLaunch);
 passInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') {
@@ -228,23 +225,22 @@ let offsetX = 0;
 let offsetY = 0;
 
 // --- 拡大・移動用パラメータ ---
-let scale = 1.0;
+let scale = 0.75; // デフォルト描画サイズを少し小さめにして枠収まりを良くする
 let panX = 0;
 let panY = 0;
 let initialDistance = 0;
-let initialScale = 1.0;
+let initialScale = 0.75;
 let startTouchX = 0;
 let startTouchY = 0;
 let initialPanX = 0;
 let initialPanY = 0;
 let lastTapTime = 0;
 
-// --- タッチイベント（ピンチ・パン・ダブルタップ） ---
 canvas.addEventListener('touchstart', (e) => {
   if (e.touches.length === 1) {
     const now = Date.now();
     if (now - lastTapTime < 300) {
-      scale = 1.0;
+      scale = 0.75;
       panX = 0;
       panY = 0;
     }
@@ -276,7 +272,7 @@ canvas.addEventListener('touchmove', (e) => {
     );
     if (initialDistance > 0) {
       const newScale = initialScale * (currentDistance / initialDistance);
-      scale = Math.min(Math.max(newScale, 0.5), 3.0);
+      scale = Math.min(Math.max(newScale, 0.4), 3.0);
     }
   }
 });
@@ -284,7 +280,7 @@ canvas.addEventListener('touchmove', (e) => {
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
   const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-  scale = Math.min(Math.max(scale * zoomFactor, 0.5), 3.0);
+  scale = Math.min(Math.max(scale * zoomFactor, 0.4), 3.0);
 }, { passive: false });
 
 
@@ -308,7 +304,6 @@ const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecogni
 let recognition = null;
 
 startBtn.addEventListener('click', () => {
-  // メイン画面の開始ボタンでもfx.wavを鳴らす
   clickAudio.currentTime = 0;
   clickAudio.play().catch(() => {});
 
@@ -442,8 +437,11 @@ for (let src in sources) {
   images[src].src = sources[src];
   images[src].onload = () => {
     if (++loadedImages >= numImages) {
-      canvas.width = images.body.naturalWidth || 1000;
-      canvas.height = images.body.naturalHeight || 1000;
+      // 修正ポイント: 頭や手足がはみ出さないよう、解像度枠を1.6倍に広げる
+      const baseWidth = images.body.naturalWidth || 1000;
+      const baseHeight = images.body.naturalHeight || 1000;
+      canvas.width = baseWidth * 1.6;
+      canvas.height = baseHeight * 1.6;
       requestAnimationFrame(render);
     }
   };
@@ -458,7 +456,8 @@ function render(timestamp) {
   ctx.translate(-canvas.width / 2, -canvas.height / 2);
 
   const centerX = canvas.width / 2;
-  const centerY = canvas.height / 2;
+  // 修正ポイント: 描画中心位置を下方向に少しシフトし、頭上の空間を確保する
+  const centerY = canvas.height / 2 + 100;
   const breath = Math.sin(timestamp / 500) * 2;
 
   drawParts(images.foot_l, centerX, centerY, 0, 0, 0);
