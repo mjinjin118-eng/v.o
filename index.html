@@ -368,8 +368,8 @@ window.addEventListener('mousemove', (e) => {
 // --- 画像描画ループ ---
 const images = {};
 const sources = {
-  h: './h.png',    // 通常・待機用（デフォルト）
-  h2: './h2.png',  // 閉口用（口パク切替用）
+  h: './h.png',    // 通常・待機用（デフォルト、口開き）
+  h2: './h2.png',  // 閉口用（リップシンク用）
   b: './b.png',
   a_r: './a_r.png',
   a_l: './a_l.png'
@@ -383,9 +383,10 @@ for (let src in sources) {
   images[src].src = sources[src];
   images[src].onload = () => {
     if (++loadedImages >= numImages) {
+      // 見切れ防止枠を保持しつつキャンバス領域を定義
       const maxDim = Math.max(images.h.naturalWidth, images.h.naturalHeight) || 1000;
-      canvas.width = maxDim;
-      canvas.height = maxDim;
+      canvas.width = maxDim * 1.5;
+      canvas.height = maxDim * 1.5;
       requestAnimationFrame(render);
     }
   };
@@ -395,10 +396,9 @@ function render(timestamp) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   ctx.save();
-  
-  // 拡大率を3.5倍に引き上げ、顔を中心にドアップ固定表示
-  const fixedScale = 3.5;
-  ctx.translate(canvas.width / 2, canvas.height / 2 + 350);
+  // 修正：拡大率を以前の「完璧なサイズ（2.2倍）」に戻し、顔を中心に配置
+  const fixedScale = 2.2;
+  ctx.translate(canvas.width / 2, canvas.height / 2 + 150);
   ctx.scale(fixedScale, fixedScale);
   ctx.translate(-canvas.width / 2, -canvas.height / 2);
 
@@ -409,16 +409,13 @@ function render(timestamp) {
   const anchorX = images.h.naturalWidth / 2;
   const anchorY = images.h.naturalHeight / 2;
 
-  // 1. 体 (b.png)
+  // 上半身パーツの描画
   drawParts(images.b, centerX, centerY, offsetX * 5, offsetY * 3 + breath, 0, anchorX, anchorY);
 
-  // 2. 右腕 (a_r.png)
   drawParts(images.a_r, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03, anchorX, anchorY);
-
-  // 3. 左腕 (a_l.png)
   drawParts(images.a_l, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03, anchorX, anchorY);
 
-  // 4. 頭 (h.png / h2.png) リップシンク切り替え処理
+  // 頭 (h.png / h2.png) リップシンク処理
   let activeHead = images.h;
   if (isSpeaking) {
     const talkCycle = Math.floor(timestamp / 150) % 2;
