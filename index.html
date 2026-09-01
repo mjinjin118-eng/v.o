@@ -396,6 +396,12 @@ function render(timestamp) {
 
   ctx.save();
   
+  // 拡大率を3.5倍に引き上げ、顔を中心にドアップ固定表示
+  const fixedScale = 3.5;
+  ctx.translate(canvas.width / 2, canvas.height / 2 + 350);
+  ctx.scale(fixedScale, fixedScale);
+  ctx.translate(-canvas.width / 2, -canvas.height / 2);
+
   const centerX = canvas.width / 2;
   const centerY = canvas.height / 2;
   const breath = Math.sin(timestamp / 500) * 2;
@@ -413,8 +419,6 @@ function render(timestamp) {
   drawParts(images.a_l, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03, anchorX, anchorY);
 
   // 4. 頭 (h.png / h2.png) リップシンク切り替え処理
-  // 通常・待機時は h.png を表示
-  // 再生中(isSpeaking = true)のみ 0.15秒周期で h.png と h2.png を交互に選択
   let activeHead = images.h;
   if (isSpeaking) {
     const talkCycle = Math.floor(timestamp / 150) % 2;
