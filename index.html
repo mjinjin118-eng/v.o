@@ -368,9 +368,11 @@ window.addEventListener('mousemove', (e) => {
 // --- 画像描画ループ ---
 const images = {};
 const sources = {
-  body: './body.png',
-  arm2_l: './arm2_l.png', arm1_l: './arm1_l.png', hand_l: './hand_l.png',
-  arm2_r: './arm2_r.png', arm1_r: './arm1_r.png', hand_r: './hand_r.png', head: './head.png'
+  h: './h.png',    // 通常・待機用（デフォルト）
+  h2: './h2.png',  // 閉口用（口パク切替用）
+  b: './b.png',
+  a_r: './a_r.png',
+  a_l: './a_l.png'
 };
 
 let loadedImages = 0;
@@ -381,11 +383,9 @@ for (let src in sources) {
   images[src].src = sources[src];
   images[src].onload = () => {
     if (++loadedImages >= numImages) {
-      // 縦方向のキャンバス領域を1.8倍に拡張（見切れ防止枠を保持）
-      const baseWidth = images.body.naturalWidth || 1000;
-      const baseHeight = images.body.naturalHeight || 1000;
-      canvas.width = baseWidth * 1.8;
-      canvas.height = baseHeight * 1.8;
+      const maxDim = Math.max(images.h.naturalWidth, images.h.naturalHeight) || 1000;
+      canvas.width = maxDim;
+      canvas.height = maxDim;
       requestAnimationFrame(render);
     }
   };
@@ -395,31 +395,33 @@ function render(timestamp) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   ctx.save();
-  // 拡大率を3.2倍に拡大し、位置を上寄りに持ち上げて「ドアップ画角」を作成
-  const fixedScale = 3.2;
-  ctx.translate(canvas.width / 2, canvas.height / 2 + 120);
-  ctx.scale(fixedScale, fixedScale);
-  ctx.translate(-canvas.width / 2, -canvas.height / 2);
-
+  
   const centerX = canvas.width / 2;
   const centerY = canvas.height / 2;
   const breath = Math.sin(timestamp / 500) * 2;
 
-  const anchorX = images.body.naturalWidth / 2;
-  const anchorY = images.body.naturalHeight / 2;
+  const anchorX = images.h.naturalWidth / 2;
+  const anchorY = images.h.naturalHeight / 2;
 
-  // 各パーツの描画
-  drawParts(images.body, centerX, centerY, offsetX * 5, offsetY * 3 + breath, 0, anchorX, anchorY);
+  // 1. 体 (b.png)
+  drawParts(images.b, centerX, centerY, offsetX * 5, offsetY * 3 + breath, 0, anchorX, anchorY);
 
-  drawParts(images.arm2_r, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03, anchorX, anchorY);
-  drawParts(images.arm1_r, centerX, centerY, offsetX * 12, offsetY * 6 + breath, offsetX * 0.08, anchorX, anchorY);
-  drawParts(images.hand_r, centerX, centerY, offsetX * 15, offsetY * 8 + breath, offsetX * 0.08, anchorX, anchorY);
+  // 2. 右腕 (a_r.png)
+  drawParts(images.a_r, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03, anchorX, anchorY);
 
-  drawParts(images.arm2_l, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03, anchorX, anchorY);
-  drawParts(images.arm1_l, centerX, centerY, offsetX * 12, offsetY * 6 + breath, offsetX * 0.05, anchorX, anchorY);
-  drawParts(images.hand_l, centerX, centerY, offsetX * 15, offsetY * 8 + breath, offsetX * 0.08, anchorX, anchorY);
+  // 3. 左腕 (a_l.png)
+  drawParts(images.a_l, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03, anchorX, anchorY);
 
-  drawParts(images.head, centerX, centerY, offsetX * 25, offsetY * 15 + breath * 0.5, offsetX * 0.06, anchorX, anchorY);
+  // 4. 頭 (h.png / h2.png) リップシンク切り替え処理
+  // 通常・待機時は h.png を表示
+  // 再生中(isSpeaking = true)のみ 0.15秒周期で h.png と h2.png を交互に選択
+  let activeHead = images.h;
+  if (isSpeaking) {
+    const talkCycle = Math.floor(timestamp / 150) % 2;
+    activeHead = (talkCycle === 0) ? images.h : images.h2;
+  }
+
+  drawParts(activeHead, centerX, centerY, offsetX * 25, offsetY * 15 + breath * 0.5, offsetX * 0.06, anchorX, anchorY);
 
   ctx.restore();
 
