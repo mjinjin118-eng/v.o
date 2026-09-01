@@ -122,6 +122,7 @@
       max-height: 100vh;
       touch-action: none;
     }
+
     .ui-container {
       position: absolute;
       top: 20px;
@@ -131,6 +132,7 @@
       gap: 10px;
       z-index: 10;
     }
+
     .btn {
       padding: 12px 24px;
       font-size: 16px;
@@ -142,9 +144,11 @@
       cursor: pointer;
       box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
+
     .btn:active {
       transform: scale(0.95);
     }
+
     #status {
       color: white;
       background: rgba(0,0,0,0.6);
@@ -223,66 +227,6 @@ const ctx = canvas.getContext('2d');
 
 let offsetX = 0;
 let offsetY = 0;
-
-// --- 拡大・移動用パラメータ ---
-let scale = 1.6; // 全体表示スケールを最適化
-let panX = 0;
-let panY = 0;
-let initialDistance = 0;
-let initialScale = 1.6;
-let startTouchX = 0;
-let startTouchY = 0;
-let initialPanX = 0;
-let initialPanY = 0;
-let lastTapTime = 0;
-
-canvas.addEventListener('touchstart', (e) => {
-  if (e.touches.length === 1) {
-    const now = Date.now();
-    if (now - lastTapTime < 300) {
-      scale = 1.6;
-      panX = 0;
-      panY = 0;
-    }
-    lastTapTime = now;
-
-    startTouchX = e.touches[0].clientX;
-    startTouchY = e.touches[0].clientY;
-    initialPanX = panX;
-    initialPanY = panY;
-  } else if (e.touches.length === 2) {
-    initialDistance = Math.hypot(
-      e.touches[0].clientX - e.touches[1].clientX,
-      e.touches[0].clientY - e.touches[1].clientY
-    );
-    initialScale = scale;
-  }
-});
-
-canvas.addEventListener('touchmove', (e) => {
-  if (e.touches.length === 1) {
-    const deltaX = e.touches[0].clientX - startTouchX;
-    const deltaY = e.touches[0].clientY - startTouchY;
-    panX = initialPanX + deltaX;
-    panY = initialPanY + deltaY;
-  } else if (e.touches.length === 2) {
-    const currentDistance = Math.hypot(
-      e.touches[0].clientX - e.touches[1].clientX,
-      e.touches[0].clientY - e.touches[1].clientY
-    );
-    if (initialDistance > 0) {
-      const newScale = initialScale * (currentDistance / initialDistance);
-      scale = Math.min(Math.max(newScale, 0.5), 4.0);
-    }
-  }
-});
-
-canvas.addEventListener('wheel', (e) => {
-  e.preventDefault();
-  const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-  scale = Math.min(Math.max(scale * zoomFactor, 0.5), 4.0);
-}, { passive: false });
-
 
 // --- 1. ボイス20個の読み込み ＆ 過去3回履歴管理 ---
 const TOTAL_VOICES = 20;
@@ -424,7 +368,7 @@ window.addEventListener('mousemove', (e) => {
 // --- 画像描画ループ ---
 const images = {};
 const sources = {
-  foot_l: './foot_l.png', foot_r: './foot_r.png', leg: './leg.png', body: './body.png',
+  body: './body.png',
   arm2_l: './arm2_l.png', arm1_l: './arm1_l.png', hand_l: './hand_l.png',
   arm2_r: './arm2_r.png', arm1_r: './arm1_r.png', hand_r: './hand_r.png', head: './head.png'
 };
@@ -437,8 +381,11 @@ for (let src in sources) {
   images[src].src = sources[src];
   images[src].onload = () => {
     if (++loadedImages >= numImages) {
-      canvas.width = images.body.naturalWidth || 1000;
-      canvas.height = images.body.naturalHeight || 1000;
+      // 修正1: 縦方向のキャンバス描画領域を1.5倍に拡張して頭上の枠を作る
+      const baseWidth = images.body.naturalWidth || 1000;
+      const baseHeight = images.body.naturalHeight || 1000;
+      canvas.width = baseWidth * 1.5;
+      canvas.height = baseHeight * 1.5;
       requestAnimationFrame(render);
     }
   };
@@ -448,23 +395,20 @@ function render(timestamp) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   ctx.save();
-  // 画面の中央を起点に拡大・パン操作を適用
-  ctx.translate(canvas.width / 2 + panX, canvas.height / 2 + panY);
-  ctx.scale(scale, scale);
+  // 修正2: キャラクター全体の初期配置を下方向（+300px）へ落とし、頭上の見切れ枠を完全回避
+  const fixedScale = 1.6;
+  ctx.translate(canvas.width / 2, canvas.height / 2 + 300);
+  ctx.scale(fixedScale, fixedScale);
   ctx.translate(-canvas.width / 2, -canvas.height / 2);
 
-  // キャラクターのパーツ合成基準点（中心）
   const centerX = canvas.width / 2;
-  const centerY = canvas.height / 2 + 50; // 頭上が見切れないように少し下げる
+  const centerY = canvas.height / 2;
   const breath = Math.sin(timestamp / 500) * 2;
 
-  // 各パーツ描画時のアンカーポイントを個別に指定して中央に配置
   const anchorX = images.body.naturalWidth / 2;
   const anchorY = images.body.naturalHeight / 2;
 
-  drawParts(images.foot_l, centerX, centerY, 0, 0, 0, anchorX, anchorY);
-  drawParts(images.foot_r, centerX, centerY, 0, 0, 0, anchorX, anchorY);
-  drawParts(images.leg, centerX, centerY, offsetX * 3, offsetY * 2, 0, anchorX, anchorY);
+  // 上半身パーツの描画
   drawParts(images.body, centerX, centerY, offsetX * 5, offsetY * 3 + breath, 0, anchorX, anchorY);
 
   drawParts(images.arm2_r, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03, anchorX, anchorY);
