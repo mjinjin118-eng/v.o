@@ -381,11 +381,11 @@ for (let src in sources) {
   images[src].src = sources[src];
   images[src].onload = () => {
     if (++loadedImages >= numImages) {
-      // 修正1: 縦方向のキャンバス描画領域を1.5倍に拡張して頭上の枠を作る
+      // 縦方向のキャンバス領域を1.8倍に拡張（見切れ防止枠を保持）
       const baseWidth = images.body.naturalWidth || 1000;
       const baseHeight = images.body.naturalHeight || 1000;
-      canvas.width = baseWidth * 1.5;
-      canvas.height = baseHeight * 1.5;
+      canvas.width = baseWidth * 1.8;
+      canvas.height = baseHeight * 1.8;
       requestAnimationFrame(render);
     }
   };
@@ -395,9 +395,9 @@ function render(timestamp) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   ctx.save();
-  // 修正2: キャラクター全体の初期配置を下方向（+300px）へ落とし、頭上の見切れ枠を完全回避
-  const fixedScale = 1.6;
-  ctx.translate(canvas.width / 2, canvas.height / 2 + 300);
+  // 拡大率を3.2倍に拡大し、位置を上寄りに持ち上げて「ドアップ画角」を作成
+  const fixedScale = 3.2;
+  ctx.translate(canvas.width / 2, canvas.height / 2 + 120);
   ctx.scale(fixedScale, fixedScale);
   ctx.translate(-canvas.width / 2, -canvas.height / 2);
 
@@ -408,7 +408,7 @@ function render(timestamp) {
   const anchorX = images.body.naturalWidth / 2;
   const anchorY = images.body.naturalHeight / 2;
 
-  // 上半身パーツの描画
+  // 各パーツの描画
   drawParts(images.body, centerX, centerY, offsetX * 5, offsetY * 3 + breath, 0, anchorX, anchorY);
 
   drawParts(images.arm2_r, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03, anchorX, anchorY);
