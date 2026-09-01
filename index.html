@@ -225,11 +225,11 @@ let offsetX = 0;
 let offsetY = 0;
 
 // --- 拡大・移動用パラメータ ---
-let scale = 0.75; // デフォルト描画サイズを少し小さめにして枠収まりを良くする
+let scale = 1.6; // 全体表示スケールを最適化
 let panX = 0;
 let panY = 0;
 let initialDistance = 0;
-let initialScale = 0.75;
+let initialScale = 1.6;
 let startTouchX = 0;
 let startTouchY = 0;
 let initialPanX = 0;
@@ -240,7 +240,7 @@ canvas.addEventListener('touchstart', (e) => {
   if (e.touches.length === 1) {
     const now = Date.now();
     if (now - lastTapTime < 300) {
-      scale = 0.75;
+      scale = 1.6;
       panX = 0;
       panY = 0;
     }
@@ -272,7 +272,7 @@ canvas.addEventListener('touchmove', (e) => {
     );
     if (initialDistance > 0) {
       const newScale = initialScale * (currentDistance / initialDistance);
-      scale = Math.min(Math.max(newScale, 0.4), 3.0);
+      scale = Math.min(Math.max(newScale, 0.5), 4.0);
     }
   }
 });
@@ -280,7 +280,7 @@ canvas.addEventListener('touchmove', (e) => {
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
   const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-  scale = Math.min(Math.max(scale * zoomFactor, 0.4), 3.0);
+  scale = Math.min(Math.max(scale * zoomFactor, 0.5), 4.0);
 }, { passive: false });
 
 
@@ -437,11 +437,8 @@ for (let src in sources) {
   images[src].src = sources[src];
   images[src].onload = () => {
     if (++loadedImages >= numImages) {
-      // 修正ポイント: 頭や手足がはみ出さないよう、解像度枠を1.6倍に広げる
-      const baseWidth = images.body.naturalWidth || 1000;
-      const baseHeight = images.body.naturalHeight || 1000;
-      canvas.width = baseWidth * 1.6;
-      canvas.height = baseHeight * 1.6;
+      canvas.width = images.body.naturalWidth || 1000;
+      canvas.height = images.body.naturalHeight || 1000;
       requestAnimationFrame(render);
     }
   };
@@ -451,36 +448,41 @@ function render(timestamp) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   ctx.save();
+  // 画面の中央を起点に拡大・パン操作を適用
   ctx.translate(canvas.width / 2 + panX, canvas.height / 2 + panY);
   ctx.scale(scale, scale);
   ctx.translate(-canvas.width / 2, -canvas.height / 2);
 
+  // キャラクターのパーツ合成基準点（中心）
   const centerX = canvas.width / 2;
-  // 修正ポイント: 描画中心位置を下方向に少しシフトし、頭上の空間を確保する
-  const centerY = canvas.height / 2 + 100;
+  const centerY = canvas.height / 2 + 50; // 頭上が見切れないように少し下げる
   const breath = Math.sin(timestamp / 500) * 2;
 
-  drawParts(images.foot_l, centerX, centerY, 0, 0, 0);
-  drawParts(images.foot_r, centerX, centerY, 0, 0, 0);
-  drawParts(images.leg, centerX, centerY, offsetX * 3, offsetY * 2, 0);
-  drawParts(images.body, centerX, centerY, offsetX * 5, offsetY * 3 + breath, 0);
+  // 各パーツ描画時のアンカーポイントを個別に指定して中央に配置
+  const anchorX = images.body.naturalWidth / 2;
+  const anchorY = images.body.naturalHeight / 2;
 
-  drawParts(images.arm2_r, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03);
-  drawParts(images.arm1_r, centerX, centerY, offsetX * 12, offsetY * 6 + breath, offsetX * 0.08);
-  drawParts(images.hand_r, centerX, centerY, offsetX * 15, offsetY * 8 + breath, offsetX * 0.08);
+  drawParts(images.foot_l, centerX, centerY, 0, 0, 0, anchorX, anchorY);
+  drawParts(images.foot_r, centerX, centerY, 0, 0, 0, anchorX, anchorY);
+  drawParts(images.leg, centerX, centerY, offsetX * 3, offsetY * 2, 0, anchorX, anchorY);
+  drawParts(images.body, centerX, centerY, offsetX * 5, offsetY * 3 + breath, 0, anchorX, anchorY);
 
-  drawParts(images.arm2_l, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03);
-  drawParts(images.arm1_l, centerX, centerY, offsetX * 12, offsetY * 6 + breath, offsetX * 0.05);
-  drawParts(images.hand_l, centerX, centerY, offsetX * 15, offsetY * 8 + breath, offsetX * 0.08);
+  drawParts(images.arm2_r, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03, anchorX, anchorY);
+  drawParts(images.arm1_r, centerX, centerY, offsetX * 12, offsetY * 6 + breath, offsetX * 0.08, anchorX, anchorY);
+  drawParts(images.hand_r, centerX, centerY, offsetX * 15, offsetY * 8 + breath, offsetX * 0.08, anchorX, anchorY);
 
-  drawParts(images.head, centerX, centerY, offsetX * 25, offsetY * 15 + breath * 0.5, offsetX * 0.06);
+  drawParts(images.arm2_l, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03, anchorX, anchorY);
+  drawParts(images.arm1_l, centerX, centerY, offsetX * 12, offsetY * 6 + breath, offsetX * 0.05, anchorX, anchorY);
+  drawParts(images.hand_l, centerX, centerY, offsetX * 15, offsetY * 8 + breath, offsetX * 0.08, anchorX, anchorY);
+
+  drawParts(images.head, centerX, centerY, offsetX * 25, offsetY * 15 + breath * 0.5, offsetX * 0.06, anchorX, anchorY);
 
   ctx.restore();
 
   requestAnimationFrame(render);
 }
 
-function drawParts(img, posX, posY, shiftX, shiftY, angle, anchorX = canvas.width / 2, anchorY = canvas.height / 2) {
+function drawParts(img, posX, posY, shiftX, shiftY, angle, anchorX, anchorY) {
   if (!img || !img.complete) return;
   ctx.save();
   ctx.translate(posX + shiftX, posY + shiftY);
