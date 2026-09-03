@@ -228,8 +228,8 @@ const ctx = canvas.getContext('2d');
 let offsetX = 0;
 let offsetY = 0;
 
-// --- 1. ボイス20個の読み込み ＆ 過去3回履歴管理 ---
-const TOTAL_VOICES = 20;
+// --- 1. ボイス30個の読み込み ＆ 過去3回履歴管理 ---
+const TOTAL_VOICES = 30; // 20から30に変更
 const voiceSources = [];
 for (let i = 1; i <= TOTAL_VOICES; i++) {
   voiceSources.push(`./voice${i}.wav`);
@@ -369,7 +369,7 @@ window.addEventListener('mousemove', (e) => {
 const images = {};
 const sources = {
   h: './h.png',    // 通常・待機用（口開き、デフォルト）
-  h2: './h2.png',  // リップシンク用（閉口）
+  h2: './h2.png',  // 閉口用（リップシンク用）
   b: './b.png',
   a_r: './a_r.png',
   a_l: './a_l.png'
@@ -383,7 +383,6 @@ for (let src in sources) {
   images[src].src = sources[src];
   images[src].onload = () => {
     if (++loadedImages >= numImages) {
-      // 見切れ防止枠を保持しつつキャンバス領域を定義
       const maxDim = Math.max(images.h.naturalWidth, images.h.naturalHeight) || 1000;
       canvas.width = maxDim * 1.5;
       canvas.height = maxDim * 1.5;
@@ -396,7 +395,6 @@ function render(timestamp) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   ctx.save();
-  // 修正：さらに拡大率を3.0倍に引き上げ、顔を中心にドアップ固定配置
   const fixedScale = 3.0;
   ctx.translate(canvas.width / 2, canvas.height / 2 + 300);
   ctx.scale(fixedScale, fixedScale);
@@ -409,7 +407,7 @@ function render(timestamp) {
   const anchorX = images.h.naturalWidth / 2;
   const anchorY = images.h.naturalHeight / 2;
 
-  // 各パーツの描画（さらに拡大された基準で）
+  // 各パーツの描画
   drawParts(images.b, centerX, centerY, offsetX * 5, offsetY * 3 + breath, 0, anchorX, anchorY);
 
   drawParts(images.a_r, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03, anchorX, anchorY);
