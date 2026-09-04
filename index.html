@@ -7,7 +7,7 @@
   <style>
     body {
       margin: 0;
-      background-image: url('./玄関前.png');
+      background-color: #1a1a1a; /* 背景をダークグレーに変更 */
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
@@ -229,7 +229,7 @@ let offsetX = 0;
 let offsetY = 0;
 
 // --- 1. ボイス30個の読み込み ＆ 過去3回履歴管理 ---
-const TOTAL_VOICES = 30; // 20から30に変更
+const TOTAL_VOICES = 30;
 const voiceSources = [];
 for (let i = 1; i <= TOTAL_VOICES; i++) {
   voiceSources.push(`./voice${i}.wav`);
