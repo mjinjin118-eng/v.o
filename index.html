@@ -416,9 +416,9 @@ function render(timestamp) {
   drawParts(images.a_r, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03, anchorX, anchorY);
   drawParts(images.a_l, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03, anchorX, anchorY);
 
-  // --- 頭部表示判定（口パク ＋ 2秒に1回のまばたき） ---
-  // 2000ms（2秒）周期の計算。先頭150ms間を「まばたき（目閉じ）」状態とする
-  const isBlinking = (timestamp % 2000) < 150;
+  // --- 頭部表示判定（口パク ＋ 3秒に1回のまばたき） ---
+  // 3000ms（3秒）周期に変更。先頭150ms間を「まばたき（目閉じ）」状態とする
+  const isBlinking = (timestamp % 3000) < 150;
   let activeHead = images.h;
 
   if (isSpeaking) {
@@ -430,7 +430,7 @@ function render(timestamp) {
       activeHead = isBlinking ? images.h4 : images.h2; // 口閉じ（まばたき判定付き）
     }
   } else {
-    // 待機中：通常は h.png、2秒に1回 h3.png でまばたき
+    // 待機中：通常は h.png、3秒に1回 h3.png でまばたき
     activeHead = isBlinking ? images.h3 : images.h;
   }
 
