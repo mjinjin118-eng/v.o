@@ -7,7 +7,7 @@
   <style>
     body {
       margin: 0;
-      background-image: url('./haikei.png'); /* 背景を haikei.png に変更 */
+      background-image: url('./haikei.png');
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
@@ -369,8 +369,10 @@ window.addEventListener('mousemove', (e) => {
 // --- 画像描画ループ ---
 const images = {};
 const sources = {
-  h: './h.png',    // 通常・待機用（口開き、デフォルト）
-  h2: './h2.png',  // 閉口用（リップシンク用）
+  h: './h.png',    // 通常・目開き・口開き
+  h2: './h2.png',  // 目開き・口閉じ
+  h3: './h3.png',  // 待機用まばたき（目閉じ・口開き）
+  h4: './h4.png',  // 再生用まばたき（目閉じ・口閉じ）
   b: './b.png',
   a_r: './a_r.png',
   a_l: './a_l.png'
@@ -414,11 +416,22 @@ function render(timestamp) {
   drawParts(images.a_r, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03, anchorX, anchorY);
   drawParts(images.a_l, centerX, centerY, offsetX * 8, offsetY * 4 + breath, offsetX * 0.03, anchorX, anchorY);
 
-  // 頭 (h.png / h2.png) リップシンク処理
+  // --- 頭部表示判定（口パク ＋ 2秒に1回のまばたき） ---
+  // 2000ms（2秒）周期の計算。先頭150ms間を「まばたき（目閉じ）」状態とする
+  const isBlinking = (timestamp % 2000) < 150;
   let activeHead = images.h;
+
   if (isSpeaking) {
+    // 再生中：0.15秒周期で口パク切り替え
     const talkCycle = Math.floor(timestamp / 150) % 2;
-    activeHead = (talkCycle === 0) ? images.h : images.h2;
+    if (talkCycle === 0) {
+      activeHead = isBlinking ? images.h3 : images.h;  // 口開き（まばたき判定付き）
+    } else {
+      activeHead = isBlinking ? images.h4 : images.h2; // 口閉じ（まばたき判定付き）
+    }
+  } else {
+    // 待機中：通常は h.png、2秒に1回 h3.png でまばたき
+    activeHead = isBlinking ? images.h3 : images.h;
   }
 
   drawParts(activeHead, centerX, centerY, offsetX * 25, offsetY * 15 + breath * 0.5, offsetX * 0.06, anchorX, anchorY);
